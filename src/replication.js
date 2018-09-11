@@ -12,7 +12,8 @@ export default {
 
       ans._table = {
         ...ans.table,
-        rx_model: 'rx_model'
+        rx_model: 'rx_model',
+        user_id: 'user_id'
       };
 
       return ans;
@@ -50,6 +51,14 @@ export default {
         type: 'string',
         enum: [name],
         default: name
+      };
+
+      const userId = model.schema.properties.user_id;
+      if (userId && userId.type !== 'string') {
+        throw Error('Schema properties cannot be called "user_id"');
+      }
+      model.schema.properties.user_id = {
+        type: 'string'
       };
     }
   }
@@ -126,8 +135,8 @@ class Replication {
           ...this.options,
           live: this.options.live || true,
           retry: this.options.retry || true,
-          filter: 'app/by_model',
-          query_params: { rx_model: name }
+          filter: 'app/by_model_and_user_id',
+          query_params: { rx_model: name, user_id: this.options.user_id }
         }
       });
     });
@@ -163,13 +172,19 @@ class Replication {
     const remoteIsUrl = typeof this.remote === 'string';
     const db = remoteIsUrl ? new PouchDB(this.remote) : this.remote;
     const doc = {
-      version: 0,
+      version: 1,
       _id: '_design/app',
       filters: {
         by_model: function(doc, req) {
           return (
             doc._id === '_design/app' || doc.rx_model === req.query.rx_model
           );
+        }.toString(),
+        by_model_and_user_id: function(doc, req) {
+          var isDesignDoc = doc._id === '_design/app';
+          var isSameRxModel = doc.rx_model === req.query.rx_model;
+          var isSameUserId = doc.user_id === req.query.user_id;
+          return isDesignDoc || (isSameRxModel && isSameUserId);
         }.toString()
       }
     };
